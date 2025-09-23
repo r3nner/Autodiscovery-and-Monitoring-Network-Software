@@ -1,0 +1,14 @@
+# requirements.txt
+
+# Para scans de rede, como ARP e ICMP Ping
+scapy
+
+# Para consultas SNMP em dispositivos de rede
+pysnmp
+
+# Para busca de fabricante a partir do endereço MAC (OUI)
+scapy-oui-lookup
+
+# Para interações com o banco de dados SQLite
+# (Já vem com o Python, mas pode ser listado para clareza)
+# sqlite3 -> não é um pacote pip, é nativo
