@@ -38,8 +38,12 @@ def run_orchestrator(shared_state, lock):
         print("\n(Orquestrador: Iniciando novo scan de rede...)")
         
         # Detecta a rede ativa a ser escaneada.
+        # Define manualmente a rede a ser escaneada, já que a detecção automática falhou.
+        # Detecta a rede ativa a ser escaneada.
         network_cidr = utils.detect_active_network()
         
+        print(f"DEBUG: O script está tentando escanear a rede -> {network_cidr}")
+
         if not network_cidr:
             print("(Orquestrador: Erro - Não foi possível detectar a rede ativa.)")
             time.sleep(config.POLLING_INTERVAL_STABLE) # Tenta novamente após um tempo.

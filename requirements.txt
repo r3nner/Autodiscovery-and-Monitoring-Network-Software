@@ -11,3 +11,5 @@ mac-vendor-lookup~=0.1.12
 # Para futuras implementações de cliente e agente SNMP, conforme especificação.
 # A versão 4.4.12 é estável e amplamente utilizada na comunidade.
 pysnmp~=4.4.12
+
+requests~=2.31.0
