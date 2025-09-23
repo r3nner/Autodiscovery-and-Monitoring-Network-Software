@@ -1,0 +1,11 @@
+# arquivos utilizados para gerar o arquivo oui_db.py para detecção de fabricante
+Mac-Fabricante
+
+# arquivo de DB que guarda os dispositivos detectados
+network_data.db
+
+# dicionario que guarda relacao MAC - fabricante para deteccao no software
+oui_db.py 
+
+
+
