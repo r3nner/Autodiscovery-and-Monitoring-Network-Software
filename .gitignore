@@ -7,5 +7,9 @@ network_data.db
 # dicionario que guarda relacao MAC - fabricante para deteccao no software
 oui_db.py 
 
+__pycache__
 
+.vscode
+
+venv
 
