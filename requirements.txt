@@ -1,14 +1,13 @@
 # requirements.txt
 
-# Para scans de rede, como ARP e ICMP Ping
-scapy
+# Para scans de rede (ARP, ICMP) e detecção de interface.
+# A versão 2.5.0 é a mais recente e estável, garantindo compatibilidade.
+scapy~=2.5.0
 
-# Para consultas SNMP em dispositivos de rede
-pysnmp
+# Para busca de fabricante a partir do endereço MAC (OUI).
+# Usando a versão mais recente que está disponível.
+mac-vendor-lookup~=0.1.12
 
-# Para busca de fabricante a partir do endereço MAC (OUI)
-scapy-oui-lookup
-
-# Para interações com o banco de dados SQLite
-# (Já vem com o Python, mas pode ser listado para clareza)
-# sqlite3 -> não é um pacote pip, é nativo
+# Para futuras implementações de cliente e agente SNMP, conforme especificação.
+# A versão 4.4.12 é estável e amplamente utilizada na comunidade.
+pysnmp~=4.4.12

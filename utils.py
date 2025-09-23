@@ -2,8 +2,8 @@
 
 # Importa a biblioteca Scapy para manipulação de pacotes e rotas de rede.
 from scapy.all import conf, get_if_hwaddr
-# Importa a função de lookup para encontrar o fabricante pelo MAC.
-from scapy_oui_lookup import oui_lookup
+# Importa as classes da biblioteca correta para buscar o fabricante do MAC.
+from mac_vendor_lookup import MacLookup, VendorNotFoundError
 
 def detect_active_network():
     """
@@ -40,8 +40,9 @@ def get_producer(mac_address):
     """
     Busca o fabricante de um dispositivo com base em seu endereço MAC.
     """
-    # Realiza a busca do fabricante usando a biblioteca.
-    producer = oui_lookup(mac_address)
-    
-    # Retorna o fabricante encontrado ou 'Desconhecido' se não for encontrado.
-    return producer if producer else "Desconhecido"
+    try:
+        # Realiza a busca do fabricante usando a biblioteca correta.
+        return MacLookup().lookup(mac_address)
+    except VendorNotFoundError:
+        # Retorna 'Desconhecido' se o fabricante do MAC não for encontrado.
+        return "Desconhecido"
