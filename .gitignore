@@ -2,7 +2,7 @@
 Mac-Fabricante
 
 # arquivo de DB que guarda os dispositivos detectados
-network_data.db
+./network_data.db
 
 # dicionario que guarda relacao MAC - fabricante para deteccao no software
 oui_db.py 
