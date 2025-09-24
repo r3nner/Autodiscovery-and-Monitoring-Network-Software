@@ -13,3 +13,5 @@ mac-vendor-lookup~=0.1.12
 pysnmp~=4.4.12
 
 requests~=2.31.0
+
+netifaces
