@@ -1,15 +1,32 @@
-# arquivos utilizados para gerar o arquivo oui_db.py para detecção de fabricante
-Mac-Fabricante
-
-# arquivo de DB que guarda os dispositivos detectados
-./network_data.db
-
-# dicionario que guarda relacao MAC - fabricante para deteccao no software
-oui_db.py 
-
-__pycache__
-
-.vscode
-
+# Ambiente Virtual Python
+venv/
 venv
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Configurações do VS Code (específicas do usuário)
+.vscode/
+
+# Bancos de Dados (gerados em runtime)
+*.db
+network_data.db
+network_discovery.db
+
+# Arquivos de status temporários
+status.json
+
+# Dicionário OUI gerado (arquivo grande)
+oui_db.py
+
+# Arquivos utilizados para gerar o arquivo oui_db.py
+Mac-Fabricante/
+
+# Logs
+*.log
+discovery.log
 
