@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 # agent_script.py
+"""
+Agente SNMP para gerenciamento remoto do sistema de autodescoberta.
+
+Implementa MIB customizada (AUTO-DISCOVERY-MIB) permitindo:
+- Monitoramento de status via SNMP GET
+- Controle remoto de scans via SNMP SET
+- Consulta de dispositivos descobertos
+- Integração com sistemas de gerenciamento de rede (NMS)
+
+Baseado em pysnmp, suporta SNMPv2c e v3.
+"""
 
 import sys
 import json
