@@ -1,4 +1,14 @@
 # cli.py
+"""
+Interface de linha de comando (CLI) interativa para controle do sistema.
+
+Implementa shell baseado em cmd.Cmd com comandos para:
+- Visualização de status do sistema
+- Gerenciamento de scans (manual/automático)
+- Controle de snapshots e histórico
+- Configuração dinâmica de parâmetros
+- Testes de conectividade SNMP
+"""
 
 import cmd
 import config

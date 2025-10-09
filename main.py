@@ -1,4 +1,13 @@
 # main.py
+"""
+Módulo principal do sistema de autodescoberta de rede.
+
+Responsável pela orquestração dos componentes do sistema, incluindo:
+- Thread de monitoramento contínuo (polling adaptativo)
+- Gerenciamento de estado compartilhado entre componentes
+- Interface CLI para controle interativo
+"""
+
 import json
 import threading
 import time
