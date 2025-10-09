@@ -1,4 +1,15 @@
 # utils.py
+"""
+Funções utilitárias para o sistema de autodescoberta.
+
+Contém helpers para:
+- Identificação de fabricantes via OUI (Organizationally Unique Identifier)
+- Auto-detecção de rede ativa local (netifaces)
+- Conversão e formatação de endereços MAC
+- Cálculo automático de CIDR para scanning
+
+Integra com oui_db.py para resolução rápida de vendors.
+"""
 
 import ipaddress
 import netifaces  # Importa a biblioteca correta

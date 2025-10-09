@@ -1,3 +1,15 @@
+# discovery.py
+"""
+Módulo de descoberta e identificação de dispositivos de rede.
+
+Implementa funções de varredura e análise usando múltiplos protocolos:
+- ARP scanning (scapy.arping) para descoberta de hosts ativos
+- ICMP ping para teste de conectividade
+- SNMPv2c/v3 para identificação de papel (roteador/host) e informações de sistema
+
+Retorna estruturas padronizadas para integração com database.py
+"""
+
 import subprocess  # Execução comandos de ping do sistema operacional
 import platform  # Detecção o sistema operacional (Windows, Linux, macOS)
 from scapy.all import arping  # Realização scan ARP na rede e descobrir dispositivos
