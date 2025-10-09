@@ -19,7 +19,7 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 # Comandos principais
-.PHONY: all help install setup run clean purge status
+.PHONY: all help install setup run clean purge status generate-oui
 
 # Target padrão
 all: help
@@ -31,13 +31,14 @@ help:
 	@echo "$(BLUE)╚════════════════════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@echo "$(GREEN)Comandos disponíveis:$(NC)"
-	@echo "  $(YELLOW)make setup$(NC)      - Instalação completa (cria venv + instala dependências)"
-	@echo "  $(YELLOW)make install$(NC)    - Apenas instala/atualiza as dependências"
-	@echo "  $(YELLOW)make run$(NC)        - Executa o software (requer sudo para ARP/ICMP)"
-	@echo "  $(YELLOW)make clean$(NC)      - Remove arquivos temporários e cache Python"
-	@echo "  $(YELLOW)make purge$(NC)      - Remove TUDO (venv, databases, cache) - CUIDADO!"
-	@echo "  $(YELLOW)make status$(NC)     - Verifica status do ambiente virtual"
-	@echo "  $(YELLOW)make help$(NC)       - Mostra esta mensagem"
+	@echo "  $(YELLOW)make setup$(NC)        - Instalação completa (cria venv + instala dependências)"
+	@echo "  $(YELLOW)make install$(NC)      - Apenas instala/atualiza as dependências"
+	@echo "  $(YELLOW)make run$(NC)          - Executa o software (requer sudo para ARP/ICMP)"
+	@echo "  $(YELLOW)make generate-oui$(NC) - Gera arquivo oui_db.py a partir de mac-vendors.json"
+	@echo "  $(YELLOW)make clean$(NC)        - Remove arquivos temporários e cache Python"
+	@echo "  $(YELLOW)make purge$(NC)        - Remove TUDO (venv, databases, cache) - CUIDADO!"
+	@echo "  $(YELLOW)make status$(NC)       - Verifica status do ambiente virtual"
+	@echo "  $(YELLOW)make help$(NC)         - Mostra esta mensagem"
 	@echo ""
 	@echo "$(GREEN)Uso rápido:$(NC)"
 	@echo "  1. Primeira vez: $(YELLOW)make setup$(NC)"
@@ -96,6 +97,29 @@ status:
 	else \
 		echo "  $(RED)✗ Virtual env NÃO encontrado$(NC)"; \
 		echo "  $(YELLOW)Execute 'make setup' para criar$(NC)"; \
+	fi
+
+## generate-oui: Gera o arquivo oui_db.py a partir do mac-vendors.json
+generate-oui: $(VENV_DIR)/bin/activate
+	@echo "$(BLUE)╔════════════════════════════════════════════════════════════╗$(NC)"
+	@echo "$(BLUE)║  Gerando banco de dados OUI (oui_db.py)                   ║$(NC)"
+	@echo "$(BLUE)╚════════════════════════════════════════════════════════════╝$(NC)"
+	@echo ""
+	@if [ ! -f Mac-Fabricante/mac-vendors.json ]; then \
+		echo "$(RED)✗ ERRO: Arquivo Mac-Fabricante/mac-vendors.json não encontrado!$(NC)"; \
+		echo "$(YELLOW)  Por favor, baixe o arquivo JSON e coloque na pasta Mac-Fabricante/$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)→ Executando script de geração...$(NC)"
+	@cd Mac-Fabricante && $(VENV_PYTHON) gerar_dicionario_json.py
+	@if [ -f oui_db.py ]; then \
+		echo ""; \
+		echo "$(GREEN)✓ Arquivo oui_db.py gerado com sucesso!$(NC)"; \
+		echo "$(BLUE)  Localização: Mac-Fabricante/oui_db.py$(NC)"; \
+		wc -l oui_db.py | awk '{print "$(BLUE)  Total de linhas: " $$1 "$(NC)"}'; \
+	else \
+		echo "$(RED)✗ Falha ao gerar oui_db.py$(NC)"; \
+		exit 1; \
 	fi
 
 ## clean: Remove arquivos temporários e cache Python

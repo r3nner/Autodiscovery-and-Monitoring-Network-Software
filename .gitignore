@@ -23,10 +23,10 @@ status.json
 # Dicionário OUI gerado (arquivo grande)
 oui_db.py
 
-# Arquivos utilizados para gerar o arquivo oui_db.py
-Mac-Fabricante/
+# Arquivos JSON muito grandes (fonte do oui_db.py)
+# NOTA: O script gerar_dicionario_json.py DEVE estar no repositório
+Mac-Fabricante/mac-vendors.json
 
 # Logs
 *.log
 discovery.log
-

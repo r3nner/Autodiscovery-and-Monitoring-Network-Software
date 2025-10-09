@@ -125,6 +125,7 @@ sudo venv/bin/python main.py
 | `make setup`  | Instalação completa do ambiente | **Primeira vez** ou após clonar o repositório |
 | `make run`    | Executa o software              | **Sempre** que quiser rodar o programa        |
 | `make install`| Atualiza dependências           | Após modificar `requirements.txt`             |
+| `make generate-oui` | Gera banco de fabricantes | Atualizar base OUI (MAC → Fabricante)        |
 | `make status` | Verifica ambiente virtual       | Diagnóstico de problemas                      |
 | `make clean`  | Remove cache e temporários      | Limpeza de arquivos `.pyc`, logs              |
 | `make purge`  | Remove TUDO (venv, DB)          | **CUIDADO!** Apaga ambiente e dados           |
@@ -337,6 +338,52 @@ Todas podem ser alteradas em tempo real via comando `config set`.
 
 ---
 
+## 🏭 Banco de Dados OUI (Identificação de Fabricantes)
+
+O sistema utiliza um banco de dados local que correlaciona prefixos MAC (OUI - Organizationally Unique Identifier) com os fabricantes dos dispositivos de rede.
+
+### Como funciona
+
+1. **Arquivo fonte**: `Mac-Fabricante/mac-vendors.json` contém a base de dados OUI atualizada
+2. **Script gerador**: `Mac-Fabricante/gerar_dicionario_json.py` converte o JSON para Python
+3. **Arquivo gerado**: `oui_db.py` (dicionário Python otimizado para consultas rápidas)
+
+### Gerar/Atualizar o banco OUI
+
+Para atualizar ou regenerar o arquivo `oui_db.py`:
+
+```bash
+make generate-oui
+```
+
+**Saída esperada:**
+
+```text
+╔════════════════════════════════════════════════════════════╗
+║  Gerando banco de dados OUI (oui_db.py)                   ║
+╚════════════════════════════════════════════════════════════╝
+
+→ Executando script de geração...
+Iniciando a leitura do arquivo 'mac-vendors.json'...
+Arquivo JSON carregado. Processando 30000+ registros...
+Processamento concluído. 30000+ fabricantes únicos adicionados ao dicionário.
+Gerando o arquivo 'oui_db.py'...
+
+Arquivo 'oui_db.py' gerado com sucesso!
+
+✓ Arquivo oui_db.py gerado com sucesso!
+  Localização: Mac-Fabricante/oui_db.py
+  Total de linhas: 55000+
+```
+
+### Quando regenerar
+
+- ✅ Após atualizar `mac-vendors.json` com dados mais recentes
+- ✅ Se `oui_db.py` estiver corrompido ou ausente
+- ✅ Para aplicar correções no script gerador
+
+---
+
 ## 📁 Estrutura do Projeto
 
 ```text
@@ -347,13 +394,14 @@ Todas podem ser alteradas em tempo real via comando `config set`.
 ├── discovery.py            # Funções de descoberta (ARP, PING, SNMP)
 ├── database.py             # Gerenciamento SQLite (scans, dispositivos)
 ├── utils.py                # Utilitários (detecção de rede ativa)
-├── oui_db.py               # Banco de fabricantes (MAC → Vendor)
+├── oui_db.py               # Banco de fabricantes (MAC → Vendor) [GERADO]
 ├── requirements.txt        # Dependências Python
 ├── Makefile                # Automação de instalação/execução
 ├── README.md               # Este arquivo
 ├── network_data.db         # Banco SQLite (gerado automaticamente)
 └── Mac-Fabricante/
-    └── mac-vendors.json    # Base de dados OUI (fabricantes)
+    ├── gerar_dicionario_json.py  # Script gerador de oui_db.py
+    └── mac-vendors.json          # Base de dados OUI (fonte)
 ```
 
 ---
