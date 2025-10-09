@@ -1,128 +1,203 @@
 # database.py
 
-# Importa a biblioteca para interagir com o banco de dados SQLite.
 import sqlite3
-# Importa a biblioteca para trabalhar com data e hora.
-import datetime
-# Importa as configurações definidas no projeto.
-import config
+from datetime import datetime
+
+DB_FILE = 'network_discovery.db'
+
+def _get_db_connection():
+    """Cria e retorna uma conexão com o banco de dados."""
+    conn = sqlite3.connect(DB_FILE)
+    # Retorna as linhas como dicionários para facilitar o acesso por nome de coluna
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def inicializar_db():
-    """
-    Cria e inicializa o banco de dados e as tabelas, se não existirem.
-    """
-    # Conecta ao arquivo de banco de dados definido no config.
-    conn = sqlite3.connect(config.DB_NAME)
-    # Cria um cursor para executar comandos SQL.
+    """Cria as tabelas do banco de dados se elas não existirem."""
+    conn = _get_db_connection()
     cursor = conn.cursor()
-
-    # Define e executa o comando para criar a tabela 'scans'.
-    # Esta tabela armazena um registro para cada vez que a rede é escaneada.
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS scans (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME NOT NULL
         )
     ''')
-
-    # Define e executa o comando para criar a tabela 'devices'.
-    # Esta tabela armazena os detalhes de cada dispositivo encontrado em um scan.
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS devices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_id INTEGER,
-            ip TEXT NOT NULL,
-            mac TEXT,
-            status TEXT,
-            producer TEXT,
-            latency_ms REAL,
-            open_ports TEXT,
+            device_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id INTEGER NOT NULL,
+            ip TEXT,
+            mac TEXT NOT NULL,
+            status TEXT NOT NULL,
             snmp_name TEXT,
-            snmp_description TEXT,
-            FOREIGN KEY (scan_id) REFERENCES scans (id)
+            producer TEXT, 
+            role TEXT,     
+            FOREIGN KEY (scan_id) REFERENCES scans (scan_id)
         )
     ''')
-
-    # Confirma (commita) a criação das tabelas no banco de dados.
-    conn.commit()
-    # Fecha a conexão com o banco de dados.
-    conn.close()
-
-def salvar_resultado_scan(devices_list):
-    """
-    Salva a lista de dispositivos de uma varredura no banco de dados.
-    """
-    # Conecta ao banco de dados.
-    conn = sqlite3.connect(config.DB_NAME)
-    # Cria um cursor.
-    cursor = conn.cursor()
-
-    # Obtém o timestamp atual para registrar o momento do scan.
-    now = datetime.datetime.now()
-    # Insere um novo registro na tabela 'scans' e obtém seu ID.
-    cursor.execute("INSERT INTO scans (timestamp) VALUES (?)", (now,))
-    scan_id = cursor.lastrowid
-
-    # Itera sobre a lista de dispositivos encontrados para salvá-los.
-    for device in devices_list:
-        # Define a query SQL para inserir um dispositivo.
-        query = '''
-            INSERT INTO devices (scan_id, ip, mac, status, producer, latency_ms)
-            VALUES (?, ?, ?, ?, ?, ?)
-        '''
-        # Prepara os dados do dispositivo para inserção.
-        device_data = (
-            scan_id,
-            device.get('ip'),
-            device.get('mac'),
-            device.get('status'),
-            device.get('producer'),
-            device.get('latency')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS known_devices (
+            mac TEXT PRIMARY KEY,
+            first_seen DATETIME NOT NULL
         )
-        # Executa a query para inserir o dispositivo.
-        cursor.execute(query, device_data)
-
-    # Confirma (commita) todas as inserções.
+    ''')
+    
     conn.commit()
-    # Fecha a conexão.
     conn.close()
+    print("(Database: Banco de dados inicializado com sucesso.)")
 
-def get_last_scan_devices(only_online=False):
+def salvar_resultado_scan(devices):
     """
-    Busca e retorna os dispositivos do último scan realizado.
+    Salva o resultado completo de um novo scan no banco de dados, criando um novo snapshot.
     """
-    # Conecta ao banco de dados.
-    conn = sqlite3.connect(config.DB_NAME)
-    # Configura o retorno das linhas como dicionários para facilitar o acesso.
-    conn.row_factory = sqlite3.Row
-    # Cria um cursor.
+    conn = _get_db_connection()
+    cursor = conn.cursor()
+    
+    now = datetime.now()
+    cursor.execute('INSERT INTO scans (timestamp) VALUES (?)', (now,))
+    scan_id = cursor.lastrowid
+    
+    devices_to_insert = []
+    known_devices_to_check = []
+    
+    for dev in devices:
+        devices_to_insert.append(
+            (scan_id, dev.get('ip'), dev.get('mac'), dev.get('status'), 
+             dev.get('snmp_name'), dev.get('producer'), dev.get('role'))
+        )
+        if dev.get('mac'):
+            known_devices_to_check.append((dev.get('mac'), now))
+
+    if devices_to_insert:
+        cursor.executemany(
+            '''INSERT INTO devices (scan_id, ip, mac, status, snmp_name, producer, role) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            devices_to_insert
+        )
+
+    if known_devices_to_check:
+        cursor.executemany(
+            'INSERT OR IGNORE INTO known_devices (mac, first_seen) VALUES (?, ?)',
+            known_devices_to_check
+        )
+        
+    conn.commit()
+    conn.close()
+    return scan_id
+
+
+def _get_latest_scan_id():
+    """Função auxiliar para obter o ID do scan mais recente."""
+    conn = _get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT scan_id FROM scans ORDER BY timestamp DESC LIMIT 1')
+    result = cursor.fetchone()
+    conn.close()
+    return result['scan_id'] if result else None
+
+
+def get_scan_history(limit=10):
+    """
+    Lista os últimos scans (snapshots) com contagens de dispositivos.
+    Esta função substitui e unifica `list_snapshots` e a antiga `get_scan_history`.
+    """
+    conn = _get_db_connection()
+    cursor = conn.cursor()
+    query = """
+        SELECT
+            s.scan_id,
+            s.timestamp,
+            COUNT(d.device_id) AS total,
+            SUM(CASE WHEN d.status = 'online' THEN 1 ELSE 0 END) AS online_count
+        FROM scans s
+        LEFT JOIN devices d ON s.scan_id = d.scan_id
+        GROUP BY s.scan_id
+        ORDER BY s.timestamp DESC
+        LIMIT ?
+    """
+    cursor.execute(query, (limit,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_devices_for_scan_with_first_seen(scan_id=None):
+    """
+    Busca os dispositivos de um scan específico ou do último scan se o ID não for fornecido.
+    Junta com a tabela known_devices para adicionar a data 'first_seen'.
+    """
+    if scan_id is None:
+        scan_id = _get_latest_scan_id()
+        if scan_id is None:
+            return []
+            
+    conn = _get_db_connection()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        FROM devices d
+        LEFT JOIN known_devices kd ON d.mac = kd.mac
+        WHERE d.scan_id = ?
+        ORDER BY d.ip
+    """
+    cursor.execute(query, (scan_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_changes_for_last_scan():
+    """
+    Compara os dois últimos scans para identificar dispositivos novos e que ficaram offline.
+    """
+    conn = _get_db_connection()
     cursor = conn.cursor()
 
-    # Encontra o ID do scan mais recente ordenando por ID em ordem decrescente.
-    cursor.execute("SELECT id FROM scans ORDER BY id DESC LIMIT 1")
-    last_scan_row = cursor.fetchone()
+    cursor.execute('SELECT scan_id FROM scans ORDER BY timestamp DESC LIMIT 2')
+    scan_ids = [row['scan_id'] for row in cursor.fetchall()]
+    
+    if len(scan_ids) < 2:
+        return {'new': get_devices_for_scan_with_first_seen(), 'offline': []}
 
-    # Retorna uma lista vazia se nenhum scan foi encontrado.
-    if not last_scan_row:
-        return []
-
-    # Extrai o ID do último scan.
-    last_scan_id = last_scan_row['id']
-
-    # Monta a query base para buscar os dispositivos do último scan.
-    query = "SELECT * FROM devices WHERE scan_id = ?"
-    params = [last_scan_id]
-
-    # Adiciona uma condição para filtrar apenas dispositivos online, se solicitado.
-    if only_online:
-        query += " AND status = 'online'"
-
-    # Executa a query final para buscar os dispositivos.
-    cursor.execute(query, params)
-    # Obtém todos os resultados da consulta.
-    rows = cursor.fetchall()
-    # Fecha a conexão.
+    last_scan_id, prev_scan_id = scan_ids
+    
+    query_new = """
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        FROM devices d
+        LEFT JOIN known_devices kd ON d.mac = kd.mac
+        WHERE d.scan_id = ? AND d.mac NOT IN (SELECT mac FROM devices WHERE scan_id = ?)
+    """
+    cursor.execute(query_new, (last_scan_id, prev_scan_id))
+    new_devices = [dict(row) for row in cursor.fetchall()]
+    
+    query_offline = """
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        FROM devices d
+        LEFT JOIN known_devices kd ON d.mac = kd.mac
+        WHERE d.scan_id = ? AND d.status = 'online' AND d.mac NOT IN 
+              (SELECT mac FROM devices WHERE scan_id = ? AND status = 'online')
+    """
+    cursor.execute(query_offline, (prev_scan_id, last_scan_id))
+    offline_devices = [dict(row) for row in cursor.fetchall()]
+    
     conn.close()
+    return {'new': new_devices, 'offline': offline_devices}
 
-    # Converte os resultados (objetos Row) em uma lista de dicionários e retorna.
-    return [dict(row) for row in rows]
+def rollback_to_scan(scan_id):
+    """
+    Apaga todos os scans e dados de dispositivos mais recentes que o scan_id fornecido.
+    """
+    conn = _get_db_connection()
+    cursor = conn.cursor()
+    
+    # Apaga os registros de dispositivos dos scans mais novos
+    cursor.execute('DELETE FROM devices WHERE scan_id > ?', (scan_id,))
+    # Apaga os registros dos próprios scans
+    cursor.execute('DELETE FROM scans WHERE scan_id > ?', (scan_id,))
+    
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count

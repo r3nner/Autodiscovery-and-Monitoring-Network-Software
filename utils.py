@@ -54,3 +54,16 @@ def detect_active_network():
     except Exception as e:
         print(f"Erro ao detectar a rede automaticamente: {e}")
         return None
+
+
+def get_default_gateway_ip():
+    """Retorna o IP do gateway padrão IPv4 (roteador) ou None se não houver."""
+    try:
+        gateways = netifaces.gateways()
+        default_ipv4 = gateways.get('default', {}).get(netifaces.AF_INET)
+        if not default_ipv4:
+            return None
+        gw_ip = default_ipv4[0]
+        return gw_ip
+    except Exception:
+        return None

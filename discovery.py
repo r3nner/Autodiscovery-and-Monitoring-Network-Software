@@ -1,87 +1,95 @@
-# discovery.py
+import subprocess  # Execução comandos de ping do sistema operacional
+import platform  # Detecção o sistema operacional (Windows, Linux, macOS)
+from scapy.all import arping  # Realização scan ARP na rede e descobrir dispositivos
+from pysnmp.hlapi import *  # Comunicação SNMP e obter informações dos dispositivos
 
-# Importa as funções da biblioteca Scapy para criar e enviar pacotes.
-from scapy.all import ARP, Ether, srp, IP, ICMP, sr1, conf
-
-# Importa a biblioteca para medir o tempo de execução.
-import time
-
-# Importa as funções de apoio do nosso projeto.
-import utils
-# Importa as variáveis de configuração do nosso projeto.
-import config
-
-# Define o nível de verbosidade do Scapy para não exibir mensagens desnecessárias.
-conf.verb = 0
+import config  # Importa para usar as configurações de SNMP
 
 def discovery_arp(network_cidr):
     """
-    Executa uma varredura ARP na rede especificada para descobrir dispositivos.
-    Aceita a rede no formato CIDR (ex: '192.168.1.0/24').
+    Executa um scan ARP na rede para descobrir hosts ativos.
+    Retorna uma lista de dicionários, cada um com 'ip' e 'mac'.
     """
-    # Cria uma lista vazia para armazenar os dispositivos encontrados.
-    discovered_devices = []
-
-    # Cria um pacote de requisição ARP (ARP request).
-    # Define o IP de destino (pdst) para toda a faixa de rede CIDR.
-    arp_request = ARP(pdst=network_cidr)
-
-    # Cria um frame Ethernet para encapsular a requisição ARP.
-    # Define o MAC de destino (dst) como broadcast para alcançar todos na rede.
-    broadcast = Ether(dst="ff:ff:ff:ff:ff")
-
-    # Combina o frame Ethernet e a requisição ARP em um único pacote.
-    arp_request_broadcast = broadcast / arp_request
-
-    # Envia o pacote e aguarda as respostas (Send and Receive Packet).
-    # Define um timeout a partir do arquivo de configuração.
-    # A função srp retorna uma tupla com os pacotes respondidos e não respondidos.
-    answered_list, _ = srp(arp_request_broadcast, timeout=config.SCAN_TIMEOUT)
-
-    # Itera sobre a lista de respostas recebidas.
-    for sent, received in answered_list:
-        # Extrai o endereço IP da resposta.
-        ip = received.psrc
-        # Extrai o endereço MAC da resposta.
-        mac = received.hwsrc
-        # Usa uma função utilitária para obter o fabricante a partir do MAC.
-        producer = utils.get_producer(mac)
-
-        # Adiciona as informações do dispositivo em um dicionário.
-        device = {
-            'ip': ip,
-            'mac': mac,
-            'producer': producer
-        }
-        # Adiciona o dicionário do dispositivo à lista de descobertos.
-        discovered_devices.append(device)
-
-    # Retorna a lista completa de dispositivos que responderam ao scan.
-    return discovered_devices
-
-def discovery_ping(ip_address):
-    """
-    Verifica o status (online/offline) e a latência de um único IP via ICMP Ping.
-    """
-    # Cria um pacote IP/ICMP (Echo Request) para o endereço de destino.
-    packet = IP(dst=ip_address) / ICMP()
-
-    # Registra o tempo de início antes de enviar o pacote.
-    start_time = time.time()
     
-    # Envia o pacote e aguarda por uma única resposta (Send and Receive 1).
-    # Define um timeout para não esperar indefinidamente.
-    response = sr1(packet, timeout=config.SCAN_TIMEOUT)
-    
-    # Registra o tempo de término após receber a resposta ou o timeout.
-    end_time = time.time()
+    print(f"(Discovery: Executando ARP scan em {network_cidr}...)")
+    try:
+        # O timeout é herdado do config, que é ajustado em runtime pelo main.py
+        ans, unans = arping(network_cidr, timeout=config.SCAN_TIMEOUT, verbose=False)
+        devices = []
+        for sent, received in ans:
+            devices.append({
+                'ip': received.psrc,
+                'mac': received.hwsrc
+            })
+        print(f"(Discovery: ARP encontrou {len(devices)} dispositivo(s).)")
+        return devices
+    except Exception as e:
+        print(f"Erro no scan ARP: {e}")
+        return []
 
-    # Verifica se uma resposta foi recebida.
-    if response:
-        # Calcula a latência em milissegundos.
-        latency = (end_time - start_time) * 1000
-        # Retorna o status 'online' e a latência calculada.
-        return {'status': 'online', 'latency': round(latency, 2)}
-    else:
-        # Retorna o status 'offline' e latência nula se não houver resposta.
-        return {'status': 'offline', 'latency': None}
+def discovery_ping(ip):
+    """
+    Verifica se um IP está respondendo ao ping.
+    Retorna um dicionário com 'status' ('online' ou 'offline').
+    """
+    try:
+        # Constrói o comando de ping de forma compatível com Windows, Linux e macOS
+        param = '-n' if platform.system().lower() == 'windows' else '-c'
+        command = ['ping', param, '1', '-w', '1', ip]
+        
+        # Executa o comando sem mostrar a saída no console
+        response = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        if response.returncode == 0:
+            return {'status': 'online'}
+        else:
+            return {'status': 'offline'}
+    except Exception:
+        return {'status': 'offline'}
+
+def discovery_snmp_basic(ip):
+    """
+    Tenta obter informações básicas de um dispositivo via SNMP,
+    incluindo nome, descrição e se é um roteador (ipForwarding).
+    """
+    iterator = getCmd(
+        SnmpEngine(),
+        CommunityData(config.SNMP_COMMUNITY, mpModel=1),
+        UdpTransportTarget((ip, config.SNMP_PORT), timeout=config.SNMP_TIMEOUT, retries=config.SNMP_RETRIES),
+        ContextData(),
+        ObjectType(ObjectIdentity('SNMPv2-MIB', 'sysName', 0)),
+        ObjectType(ObjectIdentity('SNMPv2-MIB', 'sysDescr', 0)),
+        ObjectType(ObjectIdentity('IP-MIB', 'ipForwarding', 0)) 
+    )
+
+    try:
+        errorIndication, errorStatus, errorIndex, varBinds = next(iterator)
+
+        if errorIndication or errorStatus:
+            return {}
+
+        snmp_data = {}
+        for varBind in varBinds:
+            key = varBind[0].getMibSymbol()[0]
+            value = varBind[1]
+
+            if key == 'sysName':
+                snmp_data['snmp_name'] = str(value)
+            elif key == 'sysDescr':
+                snmp_data['snmp_description'] = str(value)
+            elif key == 'ipForwarding':
+                # O valor 1 significa 'forwarding' (é um roteador)
+                # O valor 2 significa 'not-forwarding' (é um host)
+                if int(value) == 1:
+                    snmp_data['role'] = 'Roteador'
+                else:
+                    snmp_data['role'] = 'Host'
+        
+        # Se a role não foi descoberta via ipForwarding, deixa em branco
+        if 'role' not in snmp_data:
+            snmp_data['role'] = 'N/A'
+
+        return snmp_data
+
+    except Exception:
+        return {}

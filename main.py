@@ -1,136 +1,166 @@
 # main.py
-
-# Importa os módulos para threading e controle de tempo.
+import json
 import threading
 import time
 
-# Importa os módulos específicos do nosso projeto.
 import cli
 import config
 import database
 import discovery
 import utils
+from oui_db import OUI_DATABASE
+
+
+def _write_status_file(shared_state, devices):
+
+    """Escreve o estado atual e a lista de dispositivos em um arquivo JSON."""
+
+    status_data = {
+        "control": {
+            "targetNetwork": shared_state.get('network_cidr') or 'auto'
+        },
+        "status": {
+            "nextScanInSeconds": shared_state.get('next_scan_in', 0),
+            "lastScanDeviceCount": shared_state.get('device_count', 0)
+        },
+        "devices": devices
+    }
+    try:
+        with open('status.json', 'w') as f:
+            json.dump(status_data, f, indent=4, default=str)
+    except Exception as e:
+        print(f"(Erro ao escrever arquivo de status: {e})")
+
 
 def run_orchestrator(shared_state, lock):
     """
     Contém a lógica principal que roda em segundo plano (thread).
-    Gerencia os scans de rede, o polling adaptativo e atualiza o estado.
+    Usa SNMP para identificar o papel e o dicionário local para o fabricante.
     """
-    # Aguarda um tempo inicial antes de começar o primeiro scan.
     time.sleep(config.INITIAL_DELAY)
-
-    # Armazena o número de dispositivos do scan anterior para a lógica adaptativa.
     last_device_count = -1
     
-    # Loop principal do orquestrador. Continua enquanto o programa estiver rodando.
     while shared_state.get('running', True):
-        # Adquire o lock para verificar o estado de forma segura.
         with lock:
             is_paused = shared_state.get('status') == 'pausado'
             is_forced = shared_state.get('force_scan', False)
 
-        # Pula a iteração atual se estiver pausado e não houver um scan forçado.
         if is_paused and not is_forced:
-            time.sleep(1)  # Aguarda um pouco para não consumir CPU.
+            time.sleep(1)
             continue
         
-        # --- Início do Ciclo de Descoberta ---
         print("\n(Orquestrador: Iniciando novo scan de rede...)")
         
-        # Detecta a rede ativa a ser escaneada.
-        # Define manualmente a rede a ser escaneada, já que a detecção automática falhou.
-        # Detecta a rede ativa a ser escaneada.
-        network_cidr = utils.detect_active_network()
-        
-        print(f"DEBUG: O script está tentando escanear a rede -> {network_cidr}")
+        with lock:
+            runtime_timeout = shared_state.get('scan_timeout', config.SCAN_TIMEOUT)
+            override_network = shared_state.get('network_cidr')
+            config.SNMP_VERSION = shared_state.get('snmp_version', config.SNMP_VERSION)
+            config.SNMP_COMMUNITY = shared_state.get('snmp_community', config.SNMP_COMMUNITY)
+            config.SNMP_TIMEOUT = shared_state.get('snmp_timeout', config.SNMP_TIMEOUT)
+            config.SNMP_RETRIES = shared_state.get('snmp_retries', config.SNMP_RETRIES)
+            config.SNMP_PORT = shared_state.get('snmp_port', config.SNMP_PORT)
 
+        config.SCAN_TIMEOUT = runtime_timeout
+        network_cidr = override_network or utils.detect_active_network()
+        
         if not network_cidr:
             print("(Orquestrador: Erro - Não foi possível detectar a rede ativa.)")
-            time.sleep(config.POLLING_INTERVAL_STABLE) # Tenta novamente após um tempo.
+            time.sleep(config.POLLING_INTERVAL_STABLE)
             continue
-
-        # Executa o scan ARP para descobrir os dispositivos na rede.
-        devices = discovery.discovery_arp(network_cidr)
         
-        # Itera sobre os dispositivos encontrados para verificar o status com Ping.
+        # 1. Descoberta ARP e 2. Ping
+        devices = discovery.discovery_arp(network_cidr)
         for device in devices:
-            # Chama a função de ping para cada IP.
             ping_result = discovery.discovery_ping(device['ip'])
-            # Atualiza o dicionário do dispositivo com o status e latência.
             device.update(ping_result)
         
-        # Salva a lista completa de dispositivos no banco de dados.
+        # 3. Enriquecimento SNMP (Método Confiável e Único para 'Papel')
+        print("(Orquestrador: Tentando enriquecer dispositivos online com SNMP...)")
+        for device in devices:
+            if device.get('status') == 'online':
+                snmp_info = discovery.discovery_snmp_basic(device['ip'])
+                if snmp_info:
+                    device.update(snmp_info)
+
+        # 4. Enriquecimento de Fabricante
+        print("(Orquestrador: Consultando fabricantes dos endereços MAC localmente...)")
+        from oui_db import OUI_DATABASE
+        for device in devices:
+            if 'mac' in device and device['mac']:
+                try:
+                    oui = device['mac'].replace(':', '').replace('-', '').upper()[:6]
+                    vendor = OUI_DATABASE.get(oui, 'Desconhecido')
+                    device['producer'] = vendor
+                except Exception:
+                    device['producer'] = 'N/A'
+        
+        # 5. Salvar no Banco de Dados
         database.salvar_resultado_scan(devices)
         print("(Orquestrador: Scan concluído. Resultados salvos no banco de dados.)")
         
-        # --- Lógica de Polling Adaptativo ---
         current_device_count = len(devices)
-        # Escolhe o próximo intervalo de espera.
-        # Se a contagem de dispositivos mudou, usa um intervalo menor.
+        with lock:
+            interval_stable = shared_state.get('interval_stable', config.POLLING_INTERVAL_STABLE)
+            interval_change = shared_state.get('interva l_change', config.POLLING_INTERVAL_CHANGE)
+            
         if current_device_count != last_device_count:
-            next_interval = config.POLLING_INTERVAL_CHANGE
+            next_interval = interval_change
             print(f"(Orquestrador: Mudança detectada na rede. Próximo scan em {next_interval}s.)")
         else:
-            next_interval = config.POLLING_INTERVAL_STABLE
+            next_interval = interval_stable
             print(f"(Orquestrador: Rede estável. Próximo scan em {next_interval}s.)")
         
-        # Atualiza a contagem de dispositivos para a próxima iteração.
         last_device_count = current_device_count
 
-        # Adquire o lock para atualizar o estado compartilhado de forma segura.
         with lock:
             shared_state['force_scan'] = False
             shared_state['device_count'] = current_device_count
-
-        # --- Ciclo de Espera Inteligente ---
-        # Espera pelo próximo intervalo, mas verifica a cada segundo
-        # se um comando (exit, scan now) foi emitido.
-        for i in range(next_interval):
-            # Verifica se a aplicação ainda deve rodar.
-            if not shared_state.get('running'):
-                break
-            # Verifica se um scan foi forçado pelo usuário.
-            if shared_state.get('force_scan'):
-                print("(Orquestrador: Scan forçado pelo usuário. Interrompendo espera.)")
-                break
-            
-            # Adquire o lock para atualizar o tempo restante para o próximo scan.
+        
+        seconds_remaining = next_interval
+        while seconds_remaining > 0:
             with lock:
-                shared_state['next_scan_in'] = next_interval - i
-            
-            # Aguarda por 1 segundo.
+                if not shared_state.get('running', True) or shared_state.get('status') == 'pausado' or shared_state.get('force_scan', False):
+                    break
+                shared_state['next_scan_in'] = seconds_remaining
             time.sleep(1)
+            seconds_remaining -= 1
 
-# Ponto de entrada principal do programa.
+        # 6. Escrever o arquivo de status para o agente SNMP
+        _write_status_file(shared_state, devices)
+
+
 if __name__ == "__main__":
-    # Define o estado inicial compartilhado entre a CLI e o orquestrador.
+    # O estado inicial compartilhado não precisa de alterações
     shared_state = {
-        'status': 'rodando',       # Estado atual: 'rodando' ou 'pausado'
-        'running': True,           # Controla o loop principal de ambas as threads
-        'force_scan': True,        # Sinalizador para forçar um scan imediato
-        'device_count': 0,         # Contagem de dispositivos do último scan
-        'next_scan_in': 0          # Segundos restantes para o próximo scan
+        'status': 'rodando',
+        'running': True,
+        'force_scan': True,
+        'device_count': 0,
+        'next_scan_in': 0,
+        'interval_stable': config.POLLING_INTERVAL_STABLE,
+        'interval_change': config.POLLING_INTERVAL_CHANGE,
+        'scan_timeout': config.SCAN_TIMEOUT,
+        'network_cidr': None,
+        'snmp_version': config.SNMP_VERSION,
+        'snmp_community': config.SNMP_COMMUNITY,
+        'snmp_timeout': config.SNMP_TIMEOUT,
+        'snmp_retries': config.SNMP_RETRIES,
+        'snmp_port': config.SNMP_PORT,
     }
 
-    # Cria um Lock para garantir o acesso seguro ao estado compartilhado.
     thread_lock = threading.Lock()
 
-    # Inicializa o banco de dados e cria as tabelas se não existirem.
+    # A inicialização do DB agora chama a função simplificada
     database.inicializar_db()
 
-    # Cria a thread para o orquestrador.
-    # Define como 'daemon' para que ela encerre junto com a thread principal.
     orchestrator_thread = threading.Thread(
         target=run_orchestrator,
         args=(shared_state, thread_lock),
         daemon=True
     )
-    # Inicia a execução da thread do orquestrador em segundo plano.
     orchestrator_thread.start()
 
-    # Cria a instância do shell de controle, passando o estado compartilhado.
     shell = cli.ControlShell(shared_state)
-    # Inicia o loop da CLI na thread principal, aguardando comandos do usuário.
     shell.cmdloop()
 
     print("Programa finalizado.")

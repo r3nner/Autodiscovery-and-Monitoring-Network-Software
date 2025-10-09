@@ -1,0 +1,44 @@
+{
+    "control": {
+        "targetNetwork": "auto"
+    },
+    "status": {
+        "nextScanInSeconds": 1,
+        "lastScanDeviceCount": 5
+    },
+    "devices": [
+        {
+            "ip": "10.0.1.1",
+            "mac": "c4:6e:1f:a7:d4:c4",
+            "status": "online",
+            "role": "N/A",
+            "producer": "TP-LINK TECHNOLOGIES CO.,LTD."
+        },
+        {
+            "ip": "10.0.1.12",
+            "mac": "50:c7:bf:ef:55:13",
+            "status": "online",
+            "producer": "TP-LINK TECHNOLOGIES CO.,LTD."
+        },
+        {
+            "ip": "10.0.1.20",
+            "mac": "00:22:b0:61:72:1b",
+            "status": "online",
+            "role": "N/A",
+            "producer": "D-Link Corporation"
+        },
+        {
+            "ip": "10.0.1.45",
+            "mac": "84:25:19:1d:3b:d8",
+            "status": "online",
+            "role": "N/A",
+            "producer": "Samsung Electronics"
+        },
+        {
+            "ip": "10.0.1.31",
+            "mac": "1a:e3:6f:cb:94:54",
+            "status": "offline",
+            "producer": "Desconhecido"
+        }
+    ]
+}

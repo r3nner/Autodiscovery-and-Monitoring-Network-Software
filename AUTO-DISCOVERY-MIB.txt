@@ -1,0 +1,217 @@
+AUTO-DISCOVERY-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, IpAddress, Counter32, Gauge32, TimeTicks
+        FROM SNMPv2-SMI
+    DisplayString -- CORRECAO: Removido 'TEXTUAL-CONVENTION' que nao era usado.
+        FROM SNMPv2-TC
+    MODULE-COMPLIANCE, OBJECT-GROUP -- CORRECAO: Itens necessarios para conformidade.
+        FROM SNMPv2-CONF
+    experimental
+        FROM SNMPv2-SMI;
+
+-- =============================================================================
+-- MIB Identity
+-- =============================================================================
+
+autoDiscoveryMIB MODULE-IDENTITY
+    LAST-UPDATED "202510050000Z"
+    ORGANIZATION "Projetos de Gerenciamento de Redes"
+    CONTACT-INFO
+        "E-mail: andre@example.com
+         Autor: Andre (desenvolvedor do software)"
+    DESCRIPTION
+        "MIB para monitorar e controlar o software de Autodescoberta de Rede.
+         Fornece status, controle de scan e uma tabela dos dispositivos descobertos."
+    REVISION "202510050000Z"
+    DESCRIPTION
+        "Versao inicial da MIB."
+    ::= { experimental 9999 }
+
+-- =============================================================================
+-- OID Tree Structure
+-- =============================================================================
+
+autoDiscoveryObjects       OBJECT IDENTIFIER ::= { autoDiscoveryMIB 1 }
+autoDiscoveryConformance OBJECT IDENTIFIER ::= { autoDiscoveryMIB 2 } -- CORRECAO: Ramo para conformidade.
+
+-- =============================================================================
+-- Grupo de Objetos Escalares (Controle e Status)
+-- =============================================================================
+
+discoveryControlGroup OBJECT IDENTIFIER ::= { autoDiscoveryObjects 1 }
+discoveryStatusGroup  OBJECT IDENTIFIER ::= { autoDiscoveryObjects 2 }
+
+targetNetwork OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "A rede a ser escaneada no formato CIDR (ex: 192.168.1.0/24).
+         Se uma string vazia for escrita, o software tentara a deteccao automatica."
+    ::= { discoveryControlGroup 1 }
+
+forceScanTrigger OBJECT-TYPE
+    SYNTAX      Integer32 (0..1)
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Um gatilho para forcar uma nova varredura da rede imediatamente.
+         Escrever o valor '1' neste objeto inicia o processo. A leitura
+         deste objeto sempre retornara 0."
+    ::= { discoveryControlGroup 2 }
+
+nextScanInSeconds OBJECT-TYPE
+    SYNTAX      Gauge32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "O tempo restante, em segundos, para a proxima varredura automatica.
+         Este valor e um medidor (gauge) do estado atual."
+    ::= { discoveryStatusGroup 1 }
+
+scansPerformedTotal OBJECT-TYPE
+    SYNTAX      Counter32
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION
+        "Um contador do numero total de varreduras de rede realizadas
+         desde que o software foi iniciado."
+    ::= { discoveryStatusGroup 2 }
+
+-- =============================================================================
+-- Tabela de Dispositivos Descobertos
+-- =============================================================================
+
+discoveredDevices OBJECT IDENTIFIER ::= { autoDiscoveryObjects 3 }
+
+deviceTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF DeviceEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Uma tabela contendo os dispositivos encontrados na ultima varredura da rede."
+    ::= { discoveredDevices 1 }
+
+deviceEntry OBJECT-TYPE
+    SYNTAX      DeviceEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Uma entrada (linha) na tabela de dispositivos, contendo informacoes
+         sobre um unico dispositivo descoberto."
+    INDEX   { deviceIndex }
+    ::= { deviceTable 1 }
+
+DeviceEntry ::= SEQUENCE {
+    deviceIndex             Integer32,
+    deviceIpAddress         IpAddress,
+    deviceMacAddress        DisplayString,
+    deviceStatus            INTEGER,
+    deviceManufacturer      DisplayString,
+    deviceRole              DisplayString,
+    deviceFirstSeen         TimeTicks
+}
+
+deviceIndex OBJECT-TYPE
+    SYNTAX      Integer32 (1..65535)
+    MAX-ACCESS  not-accessible -- CORRECAO: Indice da tabela deve ser not-accessible.
+    STATUS      current
+    DESCRIPTION "Um indice unico para cada linha nesta tabela."
+    ::= { deviceEntry 1 }
+
+deviceIpAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O endereco IP do dispositivo descoberto."
+    ::= { deviceEntry 2 }
+
+deviceMacAddress OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O endereco MAC do dispositivo descoberto."
+    ::= { deviceEntry 3 }
+
+deviceStatus OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    online(1),
+                    offline(2)
+                }
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O status do dispositivo (1 para online, 2 para offline)."
+    ::= { deviceEntry 4 }
+
+deviceManufacturer OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O fabricante do dispositivo, inferido a partir do endereco MAC."
+    ::= { deviceEntry 5 }
+
+deviceRole OBJECT-TYPE
+    SYNTAX      DisplayString
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O papel inferido do dispositivo (ex: Roteador, Host)."
+    ::= { deviceEntry 6 }
+
+deviceFirstSeen OBJECT-TYPE
+    SYNTAX      TimeTicks
+    MAX-ACCESS  read-only
+    STATUS      current
+    DESCRIPTION "O tempo (em centesimos de segundo) desde que o software foi iniciado
+                 ate a primeira vez que este dispositivo foi visto."
+    ::= { deviceEntry 7 }
+
+-- =============================================================================
+-- Conformance Information
+-- CORRECAO: Adicionada toda a secao de conformidade para seguir as boas praticas.
+-- =============================================================================
+
+autoDiscoveryMIBCompliances OBJECT IDENTIFIER ::= { autoDiscoveryConformance 1 }
+autoDiscoveryMIBGroups      OBJECT IDENTIFIER ::= { autoDiscoveryConformance 2 }
+
+-- Grupo de objetos escalares (status e controle)
+discoveryScalarGroup OBJECT-GROUP
+    OBJECTS {
+        targetNetwork,
+        forceScanTrigger,
+        nextScanInSeconds,
+        scansPerformedTotal
+    }
+    STATUS  current
+    DESCRIPTION
+        "Grupo de objetos escalares para controlar e monitorar o software de descoberta."
+    ::= { autoDiscoveryMIBGroups 1 }
+
+-- Grupo de objetos da tabela de dispositivos
+discoveryDeviceTableGroup OBJECT-GROUP
+    OBJECTS {
+        deviceIpAddress,
+        deviceMacAddress,
+        deviceStatus,
+        deviceManufacturer,
+        deviceRole,
+        deviceFirstSeen
+    }
+    STATUS  current
+    DESCRIPTION
+        "Grupo de objetos que representam os dados de cada dispositivo na tabela de descoberta."
+    ::= { autoDiscoveryMIBGroups 2 }
+
+-- Declaracao de conformidade
+autoDiscoveryMIBCompliance MODULE-COMPLIANCE
+    STATUS  current
+    DESCRIPTION
+        "A declaracao de conformidade para agentes que implementam a AUTO-DISCOVERY-MIB."
+    MODULE  -- this module
+        MANDATORY-GROUPS {
+            discoveryScalarGroup,
+            discoveryDeviceTableGroup
+        }
+    ::= { autoDiscoveryMIBCompliances 1 }
+
+END

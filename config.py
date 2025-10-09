@@ -28,3 +28,14 @@ LOG_FILE = "discovery.log"
 
 # Define o nível de log (DEBUG, INFO, WARNING, ERROR, CRITICAL).
 LOG_LEVEL = "INFO"
+
+# --- Configurações SNMP ---
+# Versão: '2c' (padrão) ou '3' (SNMPv3). Por ora, 2c com community.
+SNMP_VERSION = "2c"
+# Community padrão (ambiente de laboratório). Em produção, melhor SNMPv3.
+SNMP_COMMUNITY = "public"
+# Timeout (seg) e tentativas para consultas SNMP básicas
+SNMP_TIMEOUT = 3
+SNMP_RETRIES = 0
+# Porta SNMP padrão
+SNMP_PORT = 161

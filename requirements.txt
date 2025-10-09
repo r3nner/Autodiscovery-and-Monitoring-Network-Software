@@ -1,17 +1,4 @@
-# requirements.txt
+# requirements.txt com versões fixadas
 
-# Para scans de rede (ARP, ICMP) e detecção de interface.
-# A versão 2.5.0 é a mais recente e estável, garantindo compatibilidade.
-scapy~=2.5.0
-
-# Para busca de fabricante a partir do endereço MAC (OUI).
-# Usando a versão mais recente que está disponível.
-mac-vendor-lookup~=0.1.12
-
-# Para futuras implementações de cliente e agente SNMP, conforme especificação.
-# A versão 4.4.12 é estável e amplamente utilizada na comunidade.
-pysnmp~=4.4.12
-
-requests~=2.31.0
-
-netifaces
+pysnmp==4.4.12
+scapy==2.5.0
