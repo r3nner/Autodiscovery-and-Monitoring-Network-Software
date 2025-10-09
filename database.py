@@ -1,4 +1,15 @@
 # database.py
+"""
+Módulo de gerenciamento do banco de dados SQLite.
+
+Implementa camada de abstração para operações de persistência:
+- Criação e inicialização de schema (tabelas Scans e Dispositivos)
+- CRUD de scans e dispositivos de rede
+- Queries para histórico e análise comparativa
+- Gestão de snapshots com suporte a rollback
+
+Banco: SQLite com foreign keys e relacionamento 1:N (Scan -> Dispositivos)
+"""
 
 import sqlite3
 from datetime import datetime

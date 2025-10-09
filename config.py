@@ -1,4 +1,15 @@
 # config.py
+"""
+Módulo de configuração centralizada do sistema.
+
+Mantém todas as configurações modificáveis em runtime, incluindo:
+- Parâmetros de polling adaptativo
+- Configurações SNMP (versão, community, timeouts)
+- Timeouts de scan e detecção de rede
+- Nome do banco de dados SQLite
+
+Todas as variáveis podem ser modificadas via CLI durante execução.
+"""
 
 # --- Configurações do Banco de Dados ---
 # Define o nome do arquivo para o banco de dados SQLite.
