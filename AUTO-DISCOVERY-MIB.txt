@@ -33,7 +33,7 @@ autoDiscoveryMIB MODULE-IDENTITY
 -- =============================================================================
 
 autoDiscoveryObjects       OBJECT IDENTIFIER ::= { autoDiscoveryMIB 1 }
-autoDiscoveryConformance OBJECT IDENTIFIER ::= { autoDiscoveryMIB 2 } -- CORRECAO: Ramo para conformidade.
+autoDiscoveryConformance OBJECT IDENTIFIER ::= { autoDiscoveryMIB 2 } 
 
 -- =============================================================================
 -- Grupo de Objetos Escalares (Controle e Status)
