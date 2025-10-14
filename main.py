@@ -18,6 +18,7 @@ import database
 import discovery
 import utils
 from oui_db import OUI_DATABASE
+from utils import get_default_gateway_ip  # Importação necessária para detecção de gateway
 
 
 def _write_status_file(shared_state, devices):
@@ -77,21 +78,71 @@ def run_orchestrator(shared_state, lock):
             time.sleep(config.POLLING_INTERVAL_STABLE)
             continue
         
-        # 1. Descoberta ARP e 2. Ping
+        # Obtenha o gateway no início de cada scan
+        default_gateway = get_default_gateway_ip()
+        print(f"(Orquestrador: Gateway padrão detectado: {default_gateway})")
+        
+        # 1. Descoberta ARP
         devices = discovery.discovery_arp(network_cidr)
+        
+        # 2. Ping e Definição de Status (LÓGICA ATUALIZADA)
+        print("(Orquestrador: Verificando status dos dispositivos via Ping...)")
         for device in devices:
             ping_result = discovery.discovery_ping(device['ip'])
-            device.update(ping_result)
+            
+            if ping_result.get('status') == 'online':
+                device.update(ping_result)  # Adiciona status e ttl
+            else:
+                # Se o ping falhou, o dispositivo está "não responsivo"
+                device['status'] = 'unresponsive'
+                device['ttl'] = None
         
-        # 3. Enriquecimento SNMP (Método Confiável e Único para 'Papel')
+        # 3. Scan de Portas (NOVO BLOCO)
+        print("(Orquestrador: Verificando portas abertas em dispositivos online...)")
+        for device in devices:
+            if device.get('status') == 'online':
+                port_results = discovery.discovery_tcp_ports(device['ip'])
+                device.update(port_results)
+            else:
+                # Dispositivos unresponsive não têm portas abertas
+                device['open_ports'] = []
+        
+        # 4. Classificação de Papel (Gateway e TTL)
+        print("(Orquestrador: Classificando papéis via Gateway e TTL...)")
+        for device in devices:
+            # Garante que a chave 'role' exista
+            device['role'] = device.get('role', 'N/A')
+
+            if device.get('ip') == default_gateway:
+                device['role'] = 'Roteador'
+            # Só aplica a lógica de TTL se o papel ainda não foi definido pelo gateway
+            elif device.get('ttl') is not None:
+                if device['ttl'] <= 64:  # Heurística para sistemas Linux/Roteadores
+                    device['role'] = 'Roteador'
+                else:  # Heurística para sistemas Windows/Hosts
+                    device['role'] = 'Host'
+            else:
+                # Se não temos TTL (dispositivo offline ou sem resposta), assume Host
+                device['role'] = 'Host'
+        
+        # 5. Enriquecimento SNMP (sobrescreve o palpite do TTL, mas não o do gateway)
         print("(Orquestrador: Tentando enriquecer dispositivos online com SNMP...)")
         for device in devices:
             if device.get('status') == 'online':
+                # Não rodar SNMP no gateway se já o identificamos
+                if device.get('ip') == default_gateway:
+                    continue
+                
                 snmp_info = discovery.discovery_snmp_basic(device['ip'])
-                if snmp_info:
-                    device.update(snmp_info)
-
-        # 4. Enriquecimento de Fabricante
+                if snmp_info and snmp_info.get('role'):  # Se SNMP retornou um papel
+                    device.update(snmp_info)  # Atualiza, sobrescrevendo o TTL
+                elif snmp_info:
+                    # Atualiza outras informações SNMP mas mantém o role detectado
+                    snmp_info_copy = snmp_info.copy()
+                    snmp_info_copy.pop('role', None)
+                    device.update(snmp_info_copy)
+        
+        # 6. Enriquecimento de Fabricante
         print("(Orquestrador: Consultando fabricantes dos endereços MAC localmente...)")
         from oui_db import OUI_DATABASE
         for device in devices:
@@ -99,11 +150,14 @@ def run_orchestrator(shared_state, lock):
                 try:
                     oui = device['mac'].replace(':', '').replace('-', '').upper()[:6]
                     vendor = OUI_DATABASE.get(oui, 'Desconhecido')
+                    # Limita o nome do fabricante a 20 caracteres
+                    if len(vendor) > 20:
+                        vendor = vendor[:20]
                     device['producer'] = vendor
                 except Exception:
                     device['producer'] = 'N/A'
         
-        # 5. Salvar no Banco de Dados
+        # 7. Salvar no Banco de Dados
         database.salvar_resultado_scan(devices)
         print("(Orquestrador: Scan concluído. Resultados salvos no banco de dados.)")
         

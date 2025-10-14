@@ -14,6 +14,8 @@ import subprocess  # Execução comandos de ping do sistema operacional
 import platform  # Detecção o sistema operacional (Windows, Linux, macOS)
 from scapy.all import arping  # Realização scan ARP na rede e descobrir dispositivos
 from pysnmp.hlapi import *  # Comunicação SNMP e obter informações dos dispositivos
+import re  # Para extração de TTL da saída do ping
+import socket  # Para scan de portas TCP
 
 import config  # Importa para usar as configurações de SNMP
 
@@ -41,23 +43,32 @@ def discovery_arp(network_cidr):
 
 def discovery_ping(ip):
     """
-    Verifica se um IP está respondendo ao ping.
-    Retorna um dicionário com 'status' ('online' ou 'offline').
+    Verifica se um IP está respondendo ao ping e captura o TTL.
+    Retorna um dicionário com 'status' ('online' ou 'offline') e 'ttl'.
     """
     try:
         # Constrói o comando de ping de forma compatível com Windows, Linux e macOS
         param = '-n' if platform.system().lower() == 'windows' else '-c'
         command = ['ping', param, '1', '-w', '1', ip]
         
-        # Executa o comando sem mostrar a saída no console
-        response = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Execute o comando e capture a saída de texto
+        response_output = subprocess.check_output(command, stderr=subprocess.DEVNULL, text=True)
         
-        if response.returncode == 0:
-            return {'status': 'online'}
+        # Extrai o TTL da saída usando expressão regular (case-insensitive)
+        # Funciona tanto para "TTL=123" (Windows) quanto para "ttl=64" (Linux/macOS)
+        ttl_match = re.search(r'(?i)ttl=(\d+)', response_output)
+        ttl = int(ttl_match.group(1)) if ttl_match else None
+
+        if ttl is not None:
+            return {'status': 'online', 'ttl': ttl}
         else:
-            return {'status': 'offline'}
+            # Se o ping funcionou mas não achou TTL (improvável), ainda marque como online
+            return {'status': 'online', 'ttl': None}
+
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {'status': 'offline', 'ttl': None}
     except Exception:
-        return {'status': 'offline'}
+        return {'status': 'offline', 'ttl': None}
 
 def discovery_snmp_basic(ip):
     """
@@ -105,3 +116,20 @@ def discovery_snmp_basic(ip):
 
     except Exception:
         return {}
+
+
+def discovery_tcp_ports(ip):
+    """
+    Executa um scan rápido em portas TCP predefinidas para um IP.
+    Retorna um dicionário com uma lista de portas abertas.
+    """
+    open_ports = []
+    for port in config.PORTS_TO_SCAN:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(config.PORT_SCAN_TIMEOUT)
+        # result == 0 indica sucesso (porta aberta), result > 0 indica erro
+        result = sock.connect_ex((ip, port))
+        if result == 0:
+            open_ports.append(port)
+        sock.close()
+    return {'open_ports': open_ports}

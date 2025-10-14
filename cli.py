@@ -141,10 +141,16 @@ class ControlShell(cmd.Cmd):
 
     def _print_device_table(self, devices):
         """Função auxiliar para imprimir tabelas de dispositivos de forma consistente."""
-        print(f"{'IP':<18} {'MAC':<20} {'STATUS':<10} {'PAPEL':<10} {'FABRICANTE':<25} {'PRIMEIRA DESCOBERTA'}")
-        print(f"{'-'*17:<18} {'-'*19:<20} {'-'*9:<10} {'-'*9:<10} {'-'*24:<25} {'-'*20}")
+        print(f"{'IP':<18} {'MAC':<20} {'STATUS':<14} {'PAPEL':<10} {'FABRICANTE':<20} {'PORTAS ABERTAS'}")
+        print(f"{'-'*17:<18} {'-'*19:<20} {'-'*13:<14} {'-'*9:<10} {'-'*19:<20} {'-'*20}")
         for d in devices:
-            print(f"{(d.get('ip') or 'N/A'):<18} {(d.get('mac') or 'N/A'):<20} {(d.get('status') or 'N/A'):<10} {(d.get('role') or 'N/A'):<10} {(d.get('producer') or 'N/A'):<25} {str(d.get('first_seen') or 'N/A')}")
+            # Formata a lista de portas para exibição
+            ports = d.get('open_ports', [])
+            if isinstance(ports, list) and ports:
+                ports_str = ",".join(map(str, ports))
+            else:
+                ports_str = "N/A"
+            print(f"{(d.get('ip') or 'N/A'):<18} {(d.get('mac') or 'N/A'):<20} {(d.get('status') or 'N/A'):<14} {(d.get('role') or 'N/A'):<10} {(d.get('producer') or 'N/A'):<20} {ports_str}")
     def _scan_diff(self):
         changes = database.get_changes_for_last_scan()
         new_list = changes.get('new', [])

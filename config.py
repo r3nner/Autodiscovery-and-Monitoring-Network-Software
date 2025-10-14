@@ -50,3 +50,10 @@ SNMP_TIMEOUT = 3
 SNMP_RETRIES = 0
 # Porta SNMP padrão
 SNMP_PORT = 161
+
+# --- Configurações do Scan de Portas ---
+# Lista de portas TCP comuns para uma verificação rápida de serviços.
+PORTS_TO_SCAN = [21, 22, 23, 80, 443, 3389, 5900, 8080]
+
+# Timeout em segundos para cada tentativa de conexão de porta.
+PORT_SCAN_TIMEOUT = 0.5

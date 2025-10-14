@@ -44,7 +44,8 @@ def inicializar_db():
             status TEXT NOT NULL,
             snmp_name TEXT,
             producer TEXT, 
-            role TEXT,     
+            role TEXT,
+            open_ports TEXT,
             FOREIGN KEY (scan_id) REFERENCES scans (scan_id)
         )
     ''')
@@ -75,17 +76,20 @@ def salvar_resultado_scan(devices):
     known_devices_to_check = []
     
     for dev in devices:
+        # Converte a lista de portas em uma string separada por vírgulas
+        ports_str = ",".join(map(str, dev.get('open_ports', [])))
         devices_to_insert.append(
             (scan_id, dev.get('ip'), dev.get('mac'), dev.get('status'), 
-             dev.get('snmp_name'), dev.get('producer'), dev.get('role'))
+             dev.get('snmp_name'), dev.get('producer'), dev.get('role'),
+             ports_str)
         )
         if dev.get('mac'):
             known_devices_to_check.append((dev.get('mac'), now))
 
     if devices_to_insert:
         cursor.executemany(
-            '''INSERT INTO devices (scan_id, ip, mac, status, snmp_name, producer, role) 
-               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            '''INSERT INTO devices (scan_id, ip, mac, status, snmp_name, producer, role, open_ports) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             devices_to_insert
         )
 
@@ -148,7 +152,7 @@ def get_devices_for_scan_with_first_seen(scan_id=None):
     cursor = conn.cursor()
     
     query = """
-        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, d.open_ports, kd.first_seen
         FROM devices d
         LEFT JOIN known_devices kd ON d.mac = kd.mac
         WHERE d.scan_id = ?
@@ -157,7 +161,18 @@ def get_devices_for_scan_with_first_seen(scan_id=None):
     cursor.execute(query, (scan_id,))
     rows = cursor.fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    
+    # Converte a string de portas de volta para lista
+    devices = []
+    for row in rows:
+        device = dict(row)
+        if device.get('open_ports'):
+            device['open_ports'] = [int(p) for p in device['open_ports'].split(',') if p]
+        else:
+            device['open_ports'] = []
+        devices.append(device)
+    
+    return devices
 
 def get_changes_for_last_scan():
     """
@@ -175,23 +190,37 @@ def get_changes_for_last_scan():
     last_scan_id, prev_scan_id = scan_ids
     
     query_new = """
-        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, d.open_ports, kd.first_seen
         FROM devices d
         LEFT JOIN known_devices kd ON d.mac = kd.mac
         WHERE d.scan_id = ? AND d.mac NOT IN (SELECT mac FROM devices WHERE scan_id = ?)
     """
     cursor.execute(query_new, (last_scan_id, prev_scan_id))
-    new_devices = [dict(row) for row in cursor.fetchall()]
+    new_devices = []
+    for row in cursor.fetchall():
+        device = dict(row)
+        if device.get('open_ports'):
+            device['open_ports'] = [int(p) for p in device['open_ports'].split(',') if p]
+        else:
+            device['open_ports'] = []
+        new_devices.append(device)
     
     query_offline = """
-        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, kd.first_seen
+        SELECT d.ip, d.mac, d.status, d.snmp_name, d.producer, d.role, d.open_ports, kd.first_seen
         FROM devices d
         LEFT JOIN known_devices kd ON d.mac = kd.mac
         WHERE d.scan_id = ? AND d.status = 'online' AND d.mac NOT IN 
               (SELECT mac FROM devices WHERE scan_id = ? AND status = 'online')
     """
     cursor.execute(query_offline, (prev_scan_id, last_scan_id))
-    offline_devices = [dict(row) for row in cursor.fetchall()]
+    offline_devices = []
+    for row in cursor.fetchall():
+        device = dict(row)
+        if device.get('open_ports'):
+            device['open_ports'] = [int(p) for p in device['open_ports'].split(',') if p]
+        else:
+            device['open_ports'] = []
+        offline_devices.append(device)
     
     conn.close()
     return {'new': new_devices, 'offline': offline_devices}
