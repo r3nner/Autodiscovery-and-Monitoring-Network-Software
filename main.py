@@ -54,12 +54,14 @@ def run_orchestrator(shared_state, lock):
         with lock:
             is_paused = shared_state.get('status') == 'pausado'
             is_forced = shared_state.get('force_scan', False)
+            silent_mode = shared_state.get('silent_mode', False)
 
         if is_paused and not is_forced:
             time.sleep(1)
             continue
         
-        print("\n(Orquestrador: Iniciando novo scan de rede...)")
+        if not silent_mode:
+            print("\n(Orquestrador: Iniciando novo scan de rede...)")
         
         with lock:
             runtime_timeout = shared_state.get('scan_timeout', config.SCAN_TIMEOUT)
@@ -74,19 +76,22 @@ def run_orchestrator(shared_state, lock):
         network_cidr = override_network or utils.detect_active_network()
         
         if not network_cidr:
-            print("(Orquestrador: Erro - Não foi possível detectar a rede ativa.)")
+            if not silent_mode:
+                print("(Orquestrador: Erro - Não foi possível detectar a rede ativa.)")
             time.sleep(config.POLLING_INTERVAL_STABLE)
             continue
         
         # Obtenha o gateway no início de cada scan
         default_gateway = get_default_gateway_ip()
-        print(f"(Orquestrador: Gateway padrão detectado: {default_gateway})")
+        if not silent_mode:
+            print(f"(Orquestrador: Gateway padrão detectado: {default_gateway})")
         
         # 1. Descoberta ARP
         devices = discovery.discovery_arp(network_cidr)
         
         # 2. Ping e Definição de Status (LÓGICA ATUALIZADA)
-        print("(Orquestrador: Verificando status dos dispositivos via Ping...)")
+        if not silent_mode:
+            print("(Orquestrador: Verificando status dos dispositivos via Ping...)")
         for device in devices:
             ping_result = discovery.discovery_ping(device['ip'])
             
@@ -98,7 +103,8 @@ def run_orchestrator(shared_state, lock):
                 device['ttl'] = None
         
         # 3. Scan de Portas (NOVO BLOCO)
-        print("(Orquestrador: Verificando portas abertas em dispositivos online...)")
+        if not silent_mode:
+            print("(Orquestrador: Verificando portas abertas em dispositivos online...)")
         for device in devices:
             if device.get('status') == 'online':
                 port_results = discovery.discovery_tcp_ports(device['ip'])
@@ -107,26 +113,54 @@ def run_orchestrator(shared_state, lock):
                 # Dispositivos unresponsive não têm portas abertas
                 device['open_ports'] = []
         
-        # 4. Classificação de Papel (Gateway e TTL)
-        print("(Orquestrador: Classificando papéis via Gateway e TTL...)")
+        # 4. Classificação de Papel (LÓGICA REFINADA)
+        if not silent_mode:
+            print("(Orquestrador: Classificando papéis com lógica refinada...)")
+        
+        network_vendors = {'cisco', 'ubiquiti', 'palo alto'}
+        
         for device in devices:
-            # Garante que a chave 'role' exista
-            device['role'] = device.get('role', 'N/A')
-
-            if device.get('ip') == default_gateway:
+            ip = device.get('ip')
+            ports = set(device.get('open_ports', []))
+            producer = (device.get('producer') or '').lower()
+            ttl = device.get('ttl')
+            
+            # 1. Regra do Gateway (Prioridade Máxima - sempre Roteador)
+            if ip == default_gateway:
                 device['role'] = 'Roteador'
-            # Só aplica a lógica de TTL se o papel ainda não foi definido pelo gateway
-            elif device.get('ttl') is not None:
-                if device['ttl'] <= 64:  # Heurística para sistemas Linux/Roteadores
+                continue
+
+            # 2. Regras baseadas em Portas e Fabricante
+            role_found = False
+            if ports:
+                if (22 in ports or 23 in ports) and any(vendor in producer for vendor in network_vendors):
+                    device['role'] = 'Switch Gerenciável'
+                    role_found = True
+                elif (80 in ports or 443 in ports) and 'ubiquiti' in producer:
+                    device['role'] = 'Access Point'
+                    role_found = True
+                elif 3389 in ports:
+                    device['role'] = 'Servidor Windows'
+                    role_found = True
+                elif 80 in ports or 443 in ports:
+                    device['role'] = 'Servidor Web'
+                    role_found = True
+            
+            if role_found:
+                continue
+
+            # 3. Regras de Fallback baseadas em TTL
+            if ttl is not None:
+                if ttl <= 64:
                     device['role'] = 'Roteador'
-                else:  # Heurística para sistemas Windows/Hosts
+                else:
                     device['role'] = 'Host'
             else:
-                # Se não temos TTL (dispositivo offline ou sem resposta), assume Host
                 device['role'] = 'Host'
         
         # 5. Enriquecimento SNMP (sobrescreve o palpite do TTL, mas não o do gateway)
-        print("(Orquestrador: Tentando enriquecer dispositivos online com SNMP...)")
+        if not silent_mode:
+            print("(Orquestrador: Tentando enriquecer dispositivos online com SNMP...)")
         for device in devices:
             if device.get('status') == 'online':
                 # Não rodar SNMP no gateway se já o identificamos
@@ -143,7 +177,8 @@ def run_orchestrator(shared_state, lock):
                     device.update(snmp_info_copy)
         
         # 6. Enriquecimento de Fabricante
-        print("(Orquestrador: Consultando fabricantes dos endereços MAC localmente...)")
+        if not silent_mode:
+            print("(Orquestrador: Consultando fabricantes dos endereços MAC localmente...)")
         from oui_db import OUI_DATABASE
         for device in devices:
             if 'mac' in device and device['mac']:
@@ -159,7 +194,8 @@ def run_orchestrator(shared_state, lock):
         
         # 7. Salvar no Banco de Dados
         database.salvar_resultado_scan(devices)
-        print("(Orquestrador: Scan concluído. Resultados salvos no banco de dados.)")
+        if not silent_mode:
+            print("(Orquestrador: Scan concluído. Resultados salvos no banco de dados.)")
         
         current_device_count = len(devices)
         with lock:
@@ -168,10 +204,12 @@ def run_orchestrator(shared_state, lock):
             
         if current_device_count != last_device_count:
             next_interval = interval_change
-            print(f"(Orquestrador: Mudança detectada na rede. Próximo scan em {next_interval}s.)")
+            if not silent_mode:
+                print(f"(Orquestrador: Mudança detectada na rede. Próximo scan em {next_interval}s.)")
         else:
             next_interval = interval_stable
-            print(f"(Orquestrador: Rede estável. Próximo scan em {next_interval}s.)")
+            if not silent_mode:
+                print(f"(Orquestrador: Rede estável. Próximo scan em {next_interval}s.)")
         
         last_device_count = current_device_count
 
@@ -209,6 +247,7 @@ if __name__ == "__main__":
         'snmp_timeout': config.SNMP_TIMEOUT,
         'snmp_retries': config.SNMP_RETRIES,
         'snmp_port': config.SNMP_PORT,
+        'silent_mode': False,
     }
 
     thread_lock = threading.Lock()

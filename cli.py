@@ -19,7 +19,8 @@ class ControlShell(cmd.Cmd):
     """
     Implementa o shell interativo para controlar o software de descoberta.
     """
-    intro = 'Bem-vindo ao Shell de Autodescoberta. Digite help ou ? para listar os comandos.\n'
+    intro = ('Bem-vindo ao Shell de Autodescoberta. Digite help ou ? para listar os comandos.\n'
+             "Dica: Para desativar as mensagens de status do orquestrador, digite 'silent on'.")
     prompt = config.CLI_PROMPT
 
     def __init__(self, shared_state):
@@ -314,6 +315,27 @@ class ControlShell(cmd.Cmd):
 
         except (ValueError, TypeError) as e:
             print(f"  -> Valor inválido. Forneça um número inteiro quando aplicável. ({e})")
+
+
+    def do_silent(self, arg):
+        """Ativa ou desativa as mensagens de status do orquestrador. Uso: silent [on|off]"""
+        arg = arg.lower().strip()
+        if arg == 'on':
+            self.shared_state['silent_mode'] = True
+            print("  -> Modo silencioso ativado. O orquestrador não exibirá mais mensagens de status.")
+        elif arg == 'off':
+            self.shared_state['silent_mode'] = False
+            print("  -> Modo silencioso desativado. O orquestrador voltará a exibir mensagens de status.")
+        else:
+            current_status = "ativado" if self.shared_state.get('silent_mode') else "desativado"
+            print(f"  -> Uso inválido. O modo silencioso está atualmente {current_status}.")
+            print("     Use 'silent on' para ativar ou 'silent off' para desativar.")
+
+    def help_silent(self):
+        print("Ativa ou desativa as mensagens de status do orquestrador em segundo plano.\n")
+        print("Uso: silent <on|off>\n")
+        print("  on   - Oculta as mensagens como '(Orquestrador: ...)' para um terminal mais limpo.")
+        print("  off  - Reexibe as mensagens de status do orquestrador.")
 
 
     def do_exit(self, arg):
