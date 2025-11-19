@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+*.db
+__pycache__/
+*.pyc
+*.db
+.DS_Store
+status.json
+oui_db.py

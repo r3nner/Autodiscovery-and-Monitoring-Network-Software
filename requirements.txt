@@ -1,0 +1,6 @@
+# requirements.txt com versões fixadas
+
+pysnmp==4.4.12
+scapy==2.5.0
+netifaces
+pyasn1==0.4.8
