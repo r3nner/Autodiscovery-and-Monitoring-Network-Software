@@ -1,5 +1,5 @@
 # requirements.txt com versões fixadas
-
+wheel
 pysnmp==4.4.12
 scapy==2.5.0
 netifaces
