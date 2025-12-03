@@ -1,13 +1,13 @@
 # database.py
-"""
-Módulo de gerenciamento do banco de dados SQLite.
-Corrigido para suportar métricas de QoS (TTL, Latência, Perda) e Links.
-"""
+"""Módulo de gerenciamento do banco de dados SQLite."""
 
+import os
 import sqlite3
 from datetime import datetime
 
-DB_FILE = 'network_discovery.db'
+import config
+
+DB_FILE = os.path.join(os.path.dirname(__file__), config.DB_NAME)
 
 def _get_db_connection():
     """Cria e retorna uma conexão com o banco de dados."""

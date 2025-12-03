@@ -129,7 +129,7 @@ clean:
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -type f -name "*.pyo" -delete 2>/dev/null || true
 	@find . -type f -name "*.log" -delete 2>/dev/null || true
-	@rm -f status.json 2>/dev/null || true
+	@rm -f ../T3_SNMP_Agente/snmp_agent/status.json 2>/dev/null || true
 	@echo "$(GREEN)✓ Limpeza concluída!$(NC)"
 
 ## purge: Remove TUDO - venv, databases, cache (DESTRUTIVO!)
@@ -150,3 +150,72 @@ purge: clean
 	else \
 		echo "$(BLUE)Operação cancelada.$(NC)"; \
 	fi
+
+# ==============================================================================
+# AGENTE SNMP
+# ==============================================================================
+
+.PHONY: snmp-start snmp-stop snmp-restart snmp-status snmp-logs snmp-test snmp-clean snmp-install-deps snmp-configure snmp-help
+
+
+SNMP_DIR := ../T3_SNMP_Agente/snmp_agent
+SNMP_MGR := $(SNMP_DIR)/start_snmp_agent.sh
+
+snmp-start:
+	@echo "🚀 Iniciando agente SNMP..."
+	@bash $(SNMP_MGR) start
+
+snmp-stop:
+	@echo "🛑 Parando agente SNMP..."
+	@bash $(SNMP_MGR) stop
+
+snmp-restart:
+	@echo "🔄 Reiniciando agente SNMP..."
+	@bash $(SNMP_MGR) restart
+
+snmp-status:
+	@echo "📊 Status do agente SNMP..."
+	@bash $(SNMP_MGR) status
+
+snmp-logs:
+	@echo "📋 Logs do agente SNMP..."
+	@bash $(SNMP_MGR) logs
+
+snmp-test:
+	@echo "🧪 Testando agente SNMP..."
+	@bash $(SNMP_MGR) test
+
+snmp-clean:
+	@echo "🧹 Limpando arquivos do agente SNMP..."
+	@rm -f $(SNMP_DIR)/snmp_agent.pid $(SNMP_DIR)/snmp_agent.log
+	@echo "✓ Arquivos removidos"
+
+snmp-install-deps:
+	@echo "📦 Instalando dependências SNMP..."
+	@sudo apt-get update
+	@sudo apt-get install -y snmpd snmp libsnmp-dev
+	@pip3 install netsnmpagent
+	@echo "✓ Dependências instaladas"
+
+snmp-configure:
+	@echo "⚙️  Configurando snmpd..."
+	@sudo cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup || true
+	@echo "# AgentX Configuration" | sudo tee /etc/snmp/snmpd.conf > /dev/null
+	@echo "master agentx" | sudo tee -a /etc/snmp/snmpd.conf > /dev/null
+	@echo "agentXSocket tcp:localhost:705" | sudo tee -a /etc/snmp/snmpd.conf > /dev/null
+	@sudo systemctl restart snmpd
+	@echo "✓ snmpd configurado"
+
+snmp-help:
+	@echo "Comandos disponíveis do agente SNMP:"
+	@echo ""
+	@echo "  make snmp-start          - Iniciar agente"
+	@echo "  make snmp-stop           - Parar agente"
+	@echo "  make snmp-restart        - Reiniciar agente"
+	@echo "  make snmp-status         - Ver status"
+	@echo "  make snmp-logs           - Ver logs (tail -f)"
+	@echo "  make snmp-test           - Executar testes"
+	@echo "  make snmp-clean          - Limpar arquivos"
+	@echo "  make snmp-install-deps   - Instalar dependências"
+	@echo "  make snmp-configure      - Configurar snmpd"
+	@echo ""

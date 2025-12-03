@@ -2,20 +2,23 @@
 
 import json
 import time
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+INPUT_FILENAME = BASE_DIR / "mac-vendors.json"
+OUTPUT_FILENAME = BASE_DIR / "oui_db.py"
 
 def gerar_dicionario_de_json():
     """
     Lê o arquivo mac-vendors.json e gera um arquivo Python (oui_db.py)
     contendo o dicionário de fabricantes para importação rápida.
     """
-    input_filename = 'mac-vendors.json'
-    output_filename = 'oui_db.py'
     oui_db = {}
 
-    print(f"Iniciando a leitura do arquivo '{input_filename}'...")
+    print(f"Iniciando a leitura do arquivo '{INPUT_FILENAME.name}'...")
     
     try:
-        with open(input_filename, 'r', encoding='utf-8') as f_in:
+        with open(INPUT_FILENAME, 'r', encoding='utf-8') as f_in:
             # Carrega todo o conteúdo do arquivo JSON para a memória
             data = json.load(f_in)
         
@@ -38,8 +41,8 @@ def gerar_dicionario_de_json():
 
         print(f"Processamento concluído. {len(oui_db)} fabricantes únicos adicionados ao dicionário.")
 
-        print(f"Gerando o arquivo '{output_filename}'...")
-        with open(output_filename, 'w', encoding='utf-8') as f_out:
+        print(f"Gerando o arquivo '{OUTPUT_FILENAME.name}'...")
+        with open(OUTPUT_FILENAME, 'w', encoding='utf-8') as f_out:
             f_out.write("# Este arquivo foi gerado automaticamente por gerar_dicionario_json.py\n")
             f_out.write("# Contém o dicionário de fabricantes OUI para consulta rápida.\n\n")
             f_out.write("OUI_DATABASE = {\n")
@@ -47,14 +50,14 @@ def gerar_dicionario_de_json():
                 f_out.write(f"    '{prefixo}': '{fab}',\n")
             f_out.write("}\n")
 
-        print(f"\nArquivo '{output_filename}' gerado com sucesso!")
+        print(f"\nArquivo '{OUTPUT_FILENAME.name}' gerado com sucesso!")
         print("Seu programa principal agora usará esta base de dados atualizada.")
 
     except FileNotFoundError:
-        print(f"\nERRO: Arquivo '{input_filename}' não encontrado.")
+        print(f"\nERRO: Arquivo '{INPUT_FILENAME.name}' não encontrado.")
         print("Por favor, baixe o arquivo JSON e salve-o nesta pasta com o nome correto.")
     except json.JSONDecodeError:
-        print(f"\nERRO: O arquivo '{input_filename}' não é um JSON válido ou está corrompido.")
+        print(f"\nERRO: O arquivo '{INPUT_FILENAME.name}' não é um JSON válido ou está corrompido.")
 
 if __name__ == '__main__':
     inicio = time.time()

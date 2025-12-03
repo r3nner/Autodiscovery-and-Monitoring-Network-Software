@@ -9,6 +9,7 @@ Sistema completo de descoberta e monitoramento de dispositivos em rede local uti
 - [Características](#características)
 - [Requisitos](#requisitos)
 - [Instalação e Execução](#instalação-e-execução)
+- [Agente SNMP](#agente-snmp)
 - [Comandos do Makefile](#comandos-do-makefile)
 - [Comandos da CLI](#comandos-da-cli)
 - [Configurações](#configurações)
@@ -25,6 +26,7 @@ Sistema completo de descoberta e monitoramento de dispositivos em rede local uti
 - ⚡ **Polling Adaptativo**: Ajusta frequência de scans baseado em mudanças na rede
 - 🎛️ **Configuração Dinâmica**: Altera parâmetros em tempo real sem reiniciar
 - 🔐 **Suporte SNMPv2c/v3**: Flexibilidade para diferentes ambientes
+- 🌐 **Agente SNMP**: Expõe dados via protocolo SNMP (MIB customizada AUTO-DISCOVERY-MIB)
 
 ---
 
@@ -118,6 +120,47 @@ sudo venv/bin/python main.py
 
 ---
 
+## 🌐 Agente SNMP
+
+Este software pode atuar como um **agente SNMP**, expondo os dados de descoberta via protocolo SNMP através da MIB customizada `AUTO-DISCOVERY-MIB`.
+
+### Instalação Rápida
+
+```bash
+# 1. Instalar Net-SNMP
+make install-snmp
+
+# 2. Configurar agente
+make setup-snmp
+
+# 3. Testar
+make test-snmp
+```
+
+### Queries SNMP
+
+```bash
+# Número de dispositivos descobertos
+snmpget -v2c -c public localhost .1.3.6.1.3.9999.1.2.3.0
+
+# Walk completo
+snmpwalk -v2c -c public localhost .1.3.6.1.3.9999
+
+# Tabela de dispositivos
+snmptable -v2c -c public localhost .1.3.6.1.3.9999.1.3.1
+
+# Forçar novo scan (SET)
+snmpset -v2c -c private localhost .1.3.6.1.3.9999.1.1.2.0 i 1
+```
+
+### 📚 Documentação SNMP
+
+- **[SNMP_QUICKSTART.md](SNMP_QUICKSTART.md)** - Guia rápido de instalação e testes
+- **[SNMP_AGENT_STRATEGIES.md](SNMP_AGENT_STRATEGIES.md)** - Comparação de estratégias de implementação
+- **[SNMP_AGENT_USAGE.md](SNMP_AGENT_USAGE.md)** - Manual completo de uso e troubleshooting
+
+---
+
 ## 🛠️ Comandos do Makefile
 
 | Comando       | Descrição                       | Quando usar                                   |
@@ -130,6 +173,16 @@ sudo venv/bin/python main.py
 | `make clean`  | Remove cache e temporários      | Limpeza de arquivos `.pyc`, logs              |
 | `make purge`  | Remove TUDO (venv, DB)          | **CUIDADO!** Apaga ambiente e dados           |
 | `make help`   | Mostra ajuda do Makefile        | Listar todos os comandos                      |
+
+### Comandos SNMP
+
+| Comando            | Descrição                       |
+|--------------------|---------------------------------|
+| `make install-snmp`| Instala Net-SNMP (snmpd)        |
+| `make setup-snmp`  | Configura agente SNMP           |
+| `make test-snmp`   | Testa o agente SNMP             |
+| `make snmpd-status`| Status do daemon snmpd          |
+| `make snmpd-logs`  | Logs do snmpd em tempo real     |
 
 ---
 

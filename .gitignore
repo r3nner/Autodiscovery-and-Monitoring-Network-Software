@@ -1,10 +1,11 @@
+oui_db.py
 venv/
 __pycache__/
 *.pyc
 *.db
-__pycache__/
-*.pyc
-*.db
 .DS_Store
-status.json
+../T3_SNMP_Agente/snmp_agent/status.json
+../T3_SNMP_Agente/snmp_agent/snmp_agent.log
+../T3_SNMP_Agente/snmp_agent/snmp_agent.pid
+../T3_SNMP_Agente/snmp_agent/.snmp_persist/
 oui_db.py
